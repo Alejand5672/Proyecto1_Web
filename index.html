@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlogApp — Sistemas y Tecnologías Web</title>
+
+  <!-- CSS: la Persona 2 (Luis) completará estos archivos -->
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+
+  <!-- ===== BARRA DE NAVEGACIÓN ===== -->
+  <header id="site-header">
+    <nav id="main-nav">
+      <a href="#/" id="nav-logo">BlogApp</a>
+      <ul>
+        <li><a href="#/" id="nav-home">Inicio</a></li>
+        <li><a href="#/crear" id="nav-create">Nueva Publicación</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- ===== CONTENEDOR PRINCIPAL DE VISTAS ===== -->
+  <!--
+    Cada sección representa una "vista" de la SPA.
+    Solo una estará visible a la vez; el router se encarga de mostrar/ocultar.
+    Luis (Persona 2) puede agregar clases, estilos y componentes dentro de cada sección.
+  -->
+  <main id="app">
+
+    <!-- VISTA: Listado de publicaciones -->
+    <section id="view-list" class="view" aria-label="Listado de publicaciones">
+      <h1>Publicaciones</h1>
+
+      <!-- Área de controles: búsqueda, filtros (Persona 2 puede expandir) -->
+      <div id="list-controls"></div>
+
+      <!-- Aquí main.js inyecta las tarjetas de posts -->
+      <div id="posts-container"></div>
+
+      <!-- Paginación -->
+      <div id="pagination-controls"></div>
+    </section>
+
+    <!-- VISTA: Detalle de una publicación -->
+    <section id="view-detail" class="view hidden" aria-label="Detalle de publicación">
+      <!-- Contenido dinámico inyectado por main.js -->
+      <div id="post-detail"></div>
+    </section>
+
+    <!-- VISTA: Crear nueva publicación -->
+    <section id="view-create" class="view hidden" aria-label="Crear publicación">
+      <h1>Nueva Publicación</h1>
+
+      <!--
+        Formulario mínimo. Luis (Persona 2) lo estilizará y agregará validación visual.
+        validation.js (Persona 2) se encargará de las reglas de validación.
+      -->
+      <form id="form-create" novalidate>
+        <div class="form-group">
+          <label for="create-title">Título</label>
+          <input type="text" id="create-title" name="title" placeholder="Título de la publicación" required />
+          <span class="field-error" id="error-create-title"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="create-body">Contenido</label>
+          <textarea id="create-body" name="body" rows="6" placeholder="Escribe aquí el contenido..." required></textarea>
+          <span class="field-error" id="error-create-body"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="create-tags">Etiquetas (separadas por coma)</label>
+          <input type="text" id="create-tags" name="tags" placeholder="ej: tecnología, noticias" />
+        </div>
+
+        <!-- Área de feedback de la operación (toast/spinner los añade Persona 2) -->
+        <div id="form-create-feedback"></div>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-create-submit">Publicar</button>
+          <button type="button" id="btn-create-cancel">Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- VISTA: Editar publicación existente -->
+    <section id="view-edit" class="view hidden" aria-label="Editar publicación">
+      <h1>Editar Publicación</h1>
+
+      <form id="form-edit" novalidate>
+        <!-- ID oculto para saber qué post estamos editando -->
+        <input type="hidden" id="edit-post-id" />
+
+        <div class="form-group">
+          <label for="edit-title">Título</label>
+          <input type="text" id="edit-title" name="title" required />
+          <span class="field-error" id="error-edit-title"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-body">Contenido</label>
+          <textarea id="edit-body" name="body" rows="6" required></textarea>
+          <span class="field-error" id="error-edit-body"></span>
+        </div>
+
+        <div id="form-edit-feedback"></div>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-edit-submit">Guardar cambios</button>
+          <button type="button" id="btn-edit-cancel">Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ÁREA GLOBAL: spinner, toasts, modales (Persona 2 los implementará) -->
+    <div id="global-feedback" aria-live="polite"></div>
+
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer id="site-footer">
+    <p>BlogApp · Sistemas y Tecnologías Web</p>
+  </footer>
+
+  <!-- Scripts como módulos ES2022 -->
+  <script type="module" src="js/main.js"></script>
+
+</body>
+</html>
