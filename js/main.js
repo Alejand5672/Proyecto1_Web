@@ -2,401 +2,289 @@
  * main.js
  * --------
  * Punto de entrada de la aplicación.
- * Conecta el router con la API y orquesta cada vista.
+ * Orquesta router, api, ui y validation. Contiene solo lógica de control.
  *
- * Responsabilidades de este archivo:
- *  - Registrar rutas en el router
- *  - Llamar a api.js para obtener/enviar datos
- *  - Renderizar contenido mínimo (temporal) hasta que Persona 2 entregue ui.js
- *  - Manejar eventos de los formularios y botones
- *
- * Persona 2 (Luis Hernández) reemplazará las funciones render* de este archivo
- * por las de ui.js una vez las tenga listas. La lógica de datos NO cambia.
- *
- * Autor (Persona 1): Diego Guevara — 24128
+ * Persona 1 (Diego Guevara — 24128): arquitectura base, api, router, CRUD
+ * Persona 2 (Luis Hernández — 241424): integración de ui.js, validation.js,
+ *   filtros, favoritos, modal de confirmación, toasts
  */
 
-import * as api    from './api.js';
-import * as router from './router.js';
+import * as api        from './api.js';
+import * as router     from './router.js';
+import * as ui         from './ui.js';
+import * as validation from './validation.js';
 
-// ─── Estado global de la app ───────────────────────────────────────────────
-// Guardamos aquí datos que necesitan compartirse entre funciones.
+// ─── Estado global ─────────────────────────────────────────────────────────
 
 const state = {
-  posts:        [],   // lista actual de posts en memoria
-  currentPage:  0,    // página actual (para paginación)
-  postsPerPage: 10,   // posts por página
-  totalPosts:   0,    // total reportado por la API
+  posts:        [],
+  allPosts:     [],   // copia para filtrar localmente
+  currentPage:  0,
+  postsPerPage: 10,
+  totalPosts:   0,
+  filters:      { search: '', tag: '', userId: '' },
 };
 
-// ─── Helpers de UI mínimos (temporales) ────────────────────────────────────
-// Luis (Persona 2) reemplazará estas funciones con las de ui.js.
-// No mezclar lógica de negocio aquí; solo inserción de HTML básico.
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
-/**
- * Muestra un mensaje de estado en un contenedor dado.
- * Persona 2 lo reemplazará por un spinner o skeleton screen.
- */
-const setStatus = (containerId, message) => {
-  const el = document.getElementById(containerId);
-  if (el) el.innerHTML = `<p class="status-msg">${message}</p>`;
-};
+/** Filtra state.allPosts según state.filters y renderiza. */
+const applyFilters = () => {
+  const { search, tag, userId } = state.filters;
 
-/**
- * Renderizado mínimo del listado de posts.
- * Persona 2 reemplazará esto con tarjetas estilizadas desde ui.js.
- */
-const renderPostList = (posts) => {
-  const container = document.getElementById('posts-container');
-  if (!container) return;
+  const filtered = state.allPosts.filter((post) => {
+    const matchSearch = !search ||
+      post.title.toLowerCase().includes(search) ||
+      post.body.toLowerCase().includes(search);
 
-  if (!posts.length) {
-    container.innerHTML = '<p>No hay publicaciones disponibles.</p>';
-    return;
-  }
+    const matchTag = !tag ||
+      (post.tags || []).some((t) => t.toLowerCase().includes(tag));
 
-  container.innerHTML = posts
-    .map(
-      (post) => `
-      <article class="post-card" data-id="${post.id}">
-        <h2>
-          <a href="#/post/${post.id}" class="post-title-link">${post.title}</a>
-        </h2>
-        <p class="post-excerpt">${post.body.slice(0, 120)}…</p>
-        <div class="post-tags">
-          ${(post.tags || []).map((t) => `<span class="tag">${t}</span>`).join('')}
-        </div>
-        <div class="post-actions">
-          <a href="#/post/${post.id}" class="btn btn-sm">Ver más</a>
-          <a href="#/editar/${post.id}" class="btn btn-sm btn-secondary">Editar</a>
-          <button class="btn btn-sm btn-danger btn-delete" data-id="${post.id}">
-            Eliminar
-          </button>
-        </div>
-      </article>`
-    )
-    .join('');
+    const matchUser = !userId ||
+      String(post.userId) === userId;
 
-  // Adjuntar eventos de eliminar a cada botón generado
-  container.querySelectorAll('.btn-delete').forEach((btn) => {
-    btn.addEventListener('click', handleDeletePost);
+    return matchSearch && matchTag && matchUser;
   });
+
+  ui.renderPostList(filtered, handleDeletePost, handleToggleFav);
 };
 
-/**
- * Renderizado mínimo del detalle de un post.
- * Persona 2 lo enriquecerá con autor, imagen, comentarios, etc.
- */
-const renderPostDetail = (post, author = null) => {
-  const container = document.getElementById('post-detail');
-  if (!container) return;
+// ─── Carga de datos ────────────────────────────────────────────────────────
 
-  const authorName = author
-    ? `${author.firstName} ${author.lastName} (@${author.username})`
-    : `Usuario #${post.userId}`;
+const loadPage = async (page = 0) => {
+  ui.showLoading('posts-container', 'Cargando publicaciones…');
 
-  container.innerHTML = `
-    <article class="post-full">
-      <header class="post-header">
-        <a href="#/" class="btn btn-sm btn-secondary">← Volver al listado</a>
-        <h1>${post.title}</h1>
-        <p class="post-meta">Por: <strong>${authorName}</strong></p>
-        <div class="post-tags">
-          ${(post.tags || []).map((t) => `<span class="tag">${t}</span>`).join('')}
-        </div>
-      </header>
+  try {
+    const skip             = page * state.postsPerPage;
+    const { posts, total } = await api.getPosts(state.postsPerPage, skip);
 
-      <div class="post-body">
-        <p>${post.body}</p>
-      </div>
+    state.posts      = posts;
+    state.allPosts   = posts;
+    state.currentPage = page;
+    state.totalPosts  = total;
 
-      <div class="post-reactions">
-        👍 ${post.reactions?.likes ?? 0} &nbsp; 👎 ${post.reactions?.dislikes ?? 0}
-      </div>
+    // Limpiar filtros al cambiar de página
+    state.filters = { search: '', tag: '', userId: '' };
 
-      <footer class="post-footer">
-        <a href="#/editar/${post.id}" class="btn">Editar</a>
-        <button class="btn btn-danger btn-delete" data-id="${post.id}">
-          Eliminar
-        </button>
-      </footer>
-    </article>`;
+    ui.renderFilters(
+      (values) => { state.filters = values; applyFilters(); },
+      ()       => { state.filters = { search: '', tag: '', userId: '' }; applyFilters(); }
+    );
 
-  // Evento de eliminar en la vista de detalle
-  container.querySelector('.btn-delete')
-    ?.addEventListener('click', handleDeletePost);
+    ui.renderPostList(posts, handleDeletePost, handleToggleFav);
+
+    const totalPages = Math.ceil(total / state.postsPerPage);
+    ui.renderPagination(
+      page, totalPages,
+      () => loadPage(page - 1),
+      () => loadPage(page + 1)
+    );
+  } catch (error) {
+    ui.showError('posts-container', error.message);
+  }
 };
 
-/**
- * Rellena el formulario de edición con los datos actuales del post.
- */
+const loadPostDetail = async (id) => {
+  ui.showLoading('post-detail', 'Cargando publicación…');
+
+  try {
+    const post = await api.getPostById(id);
+
+    let author = null;
+    try { author = await api.getUserById(post.userId); } catch { /* no crítico */ }
+
+    ui.renderPostDetail(post, author, handleDeletePost, handleToggleFav);
+  } catch (error) {
+    ui.showError('post-detail', error.message);
+  }
+};
+
+const loadEditForm = async (id) => {
+  ui.setFormFeedback('form-edit-feedback', 'Cargando datos…', 'loading');
+
+  try {
+    const post = await api.getPostById(id);
+    populateEditForm(post);
+    ui.clearFeedback('form-edit-feedback');
+  } catch (error) {
+    ui.setFormFeedback('form-edit-feedback', `Error: ${error.message}`, 'error');
+  }
+};
+
 const populateEditForm = (post) => {
   const idField    = document.getElementById('edit-post-id');
   const titleField = document.getElementById('edit-title');
   const bodyField  = document.getElementById('edit-body');
-
   if (idField)    idField.value    = post.id;
   if (titleField) titleField.value = post.title;
   if (bodyField)  bodyField.value  = post.body;
 };
 
-/**
- * Renderiza los controles de paginación.
- * Persona 2 puede enriquecer esto con flechas, números de página, etc.
- */
-const renderPagination = () => {
-  const container = document.getElementById('pagination-controls');
-  if (!container) return;
+// ─── Favoritos ─────────────────────────────────────────────────────────────
 
-  const totalPages = Math.ceil(state.totalPosts / state.postsPerPage);
-  const current    = state.currentPage;
-
-  container.innerHTML = `
-    <button id="btn-prev" ${current === 0 ? 'disabled' : ''}>← Anterior</button>
-    <span>Página ${current + 1} de ${totalPages}</span>
-    <button id="btn-next" ${(current + 1) >= totalPages ? 'disabled' : ''}>Siguiente →</button>
-  `;
-
-  document.getElementById('btn-prev')
-    ?.addEventListener('click', () => loadPage(current - 1));
-  document.getElementById('btn-next')
-    ?.addEventListener('click', () => loadPage(current + 1));
+const handleToggleFav = (postId, btn) => {
+  const isFav = ui.toggleFavorite(postId);
+  ui.updateFavBtn(btn, isFav);
+  const msg = isFav ? 'Añadido a favoritos ⭐' : 'Quitado de favoritos';
+  ui.showToast(msg, isFav ? 'success' : 'info');
 };
 
-// ─── Carga de datos por vista ──────────────────────────────────────────────
+const loadFavoritesView = async () => {
+  const favIds = ui.getFavorites();
+  ui.showLoading('favorites-container', 'Cargando favoritos…');
 
-/**
- * Carga y renderiza una página del listado.
- * @param {number} page - Número de página (base 0)
- */
-const loadPage = async (page = 0) => {
-  setStatus('posts-container', 'Cargando publicaciones…');
+  if (!favIds.length) {
+    ui.showEmpty('favorites-container', 'Aún no tienes favoritos guardados.', '⭐');
+    return;
+  }
 
   try {
-    const skip           = page * state.postsPerPage;
-    const { posts, total } = await api.getPosts(state.postsPerPage, skip);
+    // Cargamos cada post favorito en paralelo
+    const posts = await Promise.all(favIds.map((id) => api.getPostById(id).catch(() => null)));
+    const valid  = posts.filter(Boolean);
 
-    state.posts       = posts;
-    state.currentPage = page;
-    state.totalPosts  = total;
-
-    renderPostList(posts);
-    renderPagination();
+    ui.renderFavoritesView(valid, async (id) => {
+      ui.toggleFavorite(id); // quitar
+      ui.showToast('Quitado de favoritos', 'info');
+      await loadFavoritesView(); // re-render
+    });
   } catch (error) {
-    setStatus('posts-container', `Error al cargar publicaciones: ${error.message}`);
+    ui.showError('favorites-container', error.message);
   }
 };
 
-/**
- * Carga y renderiza el detalle de un post.
- * También intenta cargar el autor para mostrarlo.
- * @param {string|number} id
- */
-const loadPostDetail = async (id) => {
-  setStatus('post-detail', 'Cargando publicación…');
+// ─── Manejadores de formularios ────────────────────────────────────────────
 
-  try {
-    const post = await api.getPostById(id);
-
-    // Intentamos obtener el autor; si falla no bloqueamos la vista
-    let author = null;
-    try {
-      author = await api.getUserById(post.userId);
-    } catch {
-      // El autor no es crítico; continuamos sin él
-    }
-
-    renderPostDetail(post, author);
-  } catch (error) {
-    setStatus('post-detail', `Error al cargar la publicación: ${error.message}`);
-  }
-};
-
-/**
- * Carga los datos de un post y rellena el formulario de edición.
- * @param {string|number} id
- */
-const loadEditForm = async (id) => {
-  const feedbackEl = document.getElementById('form-edit-feedback');
-  if (feedbackEl) feedbackEl.textContent = 'Cargando datos…';
-
-  try {
-    const post = await api.getPostById(id);
-    populateEditForm(post);
-    if (feedbackEl) feedbackEl.textContent = '';
-  } catch (error) {
-    if (feedbackEl) feedbackEl.textContent = `Error: ${error.message}`;
-  }
-};
-
-// ─── Manejadores de eventos de formularios ─────────────────────────────────
-
-/**
- * Maneja el envío del formulario "Crear publicación".
- * Persona 2 añadirá validación desde validation.js antes de este handler.
- */
 const handleCreatePost = async (event) => {
   event.preventDefault();
 
-  const title    = document.getElementById('create-title')?.value.trim();
-  const body     = document.getElementById('create-body')?.value.trim();
-  const tagsRaw  = document.getElementById('create-tags')?.value.trim();
-  const feedback = document.getElementById('form-create-feedback');
+  const title   = document.getElementById('create-title')?.value ?? '';
+  const body    = document.getElementById('create-body')?.value  ?? '';
+  const tagsRaw = document.getElementById('create-tags')?.value  ?? '';
 
-  // Validación básica mínima (Persona 2 la reemplazará con validation.js)
-  if (!title || !body) {
-    if (feedback) feedback.textContent = 'El título y el contenido son obligatorios.';
-    return;
-  }
+  const isValid = validation.validateCreateForm({ title, body });
+  if (!isValid) return;
 
-  const tags = tagsRaw
-    ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)
-    : [];
+  const tags = validation.parseTags(tagsRaw);
 
-  if (feedback) feedback.textContent = 'Publicando…';
+  ui.setFormFeedback('form-create-feedback', 'Publicando…', 'loading');
 
   try {
-    // userId 1 es el valor por defecto; Persona 2 puede integrar sesión de usuario
-    const newPost = await api.createPost({ title, body, tags, userId: 1 });
+    const newPost = await api.createPost({ title: title.trim(), body: body.trim(), tags, userId: 1 });
 
-    if (feedback) feedback.textContent = `✅ Publicación creada con ID ficticio: ${newPost.id}`;
+    ui.setFormFeedback('form-create-feedback', `Publicación creada (ID: ${newPost.id})`, 'success');
+    ui.showToast('¡Publicación creada exitosamente!', 'success');
 
-    // Limpiar formulario
     document.getElementById('form-create')?.reset();
+    validation.clearFormErrors('create');
 
-    // Redirigir al listado después de 1.5 s (Persona 2 puede usar un toast aquí)
     setTimeout(() => router.navigate('/'), 1500);
   } catch (error) {
-    if (feedback) feedback.textContent = `Error al crear: ${error.message}`;
+    ui.setFormFeedback('form-create-feedback', `Error al crear: ${error.message}`, 'error');
+    ui.showToast(`Error: ${error.message}`, 'error');
   }
 };
 
-/**
- * Maneja el envío del formulario "Editar publicación".
- * Persona 2 añadirá validación desde validation.js.
- */
 const handleEditPost = async (event) => {
   event.preventDefault();
 
-  const id       = document.getElementById('edit-post-id')?.value;
-  const title    = document.getElementById('edit-title')?.value.trim();
-  const body     = document.getElementById('edit-body')?.value.trim();
-  const feedback = document.getElementById('form-edit-feedback');
+  const id   = document.getElementById('edit-post-id')?.value  ?? '';
+  const title = document.getElementById('edit-title')?.value   ?? '';
+  const body  = document.getElementById('edit-body')?.value    ?? '';
 
-  if (!title || !body) {
-    if (feedback) feedback.textContent = 'El título y el contenido son obligatorios.';
-    return;
-  }
+  const isValid = validation.validateEditForm({ title, body });
+  if (!isValid) return;
 
-  if (feedback) feedback.textContent = 'Guardando cambios…';
+  ui.setFormFeedback('form-edit-feedback', 'Guardando cambios…', 'loading');
 
   try {
-    const updated = await api.updatePost(id, { title, body });
+    const updated = await api.updatePost(id, { title: title.trim(), body: body.trim() });
 
-    if (feedback) feedback.textContent = `✅ Publicación actualizada: "${updated.title}"`;
+    ui.setFormFeedback('form-edit-feedback', `"${updated.title}" actualizado.`, 'success');
+    ui.showToast('¡Publicación actualizada!', 'success');
 
     setTimeout(() => router.navigate(`/post/${id}`), 1500);
   } catch (error) {
-    if (feedback) feedback.textContent = `Error al actualizar: ${error.message}`;
+    ui.setFormFeedback('form-edit-feedback', `Error: ${error.message}`, 'error');
+    ui.showToast(`Error: ${error.message}`, 'error');
   }
 };
 
-/**
- * Maneja el clic en cualquier botón "Eliminar".
- * El botón debe tener `data-id` con el ID del post.
- * Persona 2 puede reemplazar el confirm() nativo por un modal personalizado.
- */
-const handleDeletePost = async (event) => {
-  const id = event.currentTarget.dataset.id;
+const handleDeletePost = async (id) => {
   if (!id) return;
 
-  // Modal nativo temporal; Persona 2 lo reemplaza con su componente modal
-  const confirmed = window.confirm('¿Seguro que deseas eliminar esta publicación?');
+  const confirmed = await ui.showConfirmModal(
+    'Esta acción no se puede deshacer. ¿Deseas continuar?'
+  );
   if (!confirmed) return;
 
   try {
     const result = await api.deletePost(id);
 
     if (result.isDeleted) {
-      // Si estamos en el detalle, volvemos al listado
+      ui.showToast('Publicación eliminada.', 'info');
+
       const currentHash = window.location.hash;
       if (currentHash.startsWith('#/post/')) {
         router.navigate('/');
       } else {
-        // Si estamos en el listado, recargamos la página actual
-        // y eliminamos el post del estado local para respuesta inmediata
-        state.posts = state.posts.filter((p) => String(p.id) !== String(id));
-        renderPostList(state.posts);
-        renderPagination();
+        state.posts    = state.posts.filter((p) => String(p.id) !== String(id));
+        state.allPosts = state.allPosts.filter((p) => String(p.id) !== String(id));
+        applyFilters();
+        ui.renderPagination(
+          state.currentPage,
+          Math.ceil(state.totalPosts / state.postsPerPage),
+          () => loadPage(state.currentPage - 1),
+          () => loadPage(state.currentPage + 1)
+        );
       }
     }
   } catch (error) {
-    // Persona 2 mostrará esto como un toast de error
-    alert(`Error al eliminar: ${error.message}`);
+    ui.showToast(`Error al eliminar: ${error.message}`, 'error');
   }
 };
 
 // ─── Registro de rutas ─────────────────────────────────────────────────────
 
-/**
- * Suscribimos a cada ruta su función correspondiente.
- * Cuando el router detecte un cambio de hash, llamará al handler correcto.
- */
 const registerRoutes = () => {
-  // Listado: carga la primera página
-  router.on('/', () => {
-    loadPage(state.currentPage);
-  });
+  router.on('/', () => loadPage(state.currentPage));
 
-  // Detalle: carga un post por ID
-  router.on('/post/:id', ({ id }) => {
-    loadPostDetail(id);
-  });
+  router.on('/post/:id', ({ id }) => loadPostDetail(id));
 
-  // Crear: solo limpiamos el formulario y el feedback
   router.on('/crear', () => {
     document.getElementById('form-create')?.reset();
-    const feedback = document.getElementById('form-create-feedback');
-    if (feedback) feedback.textContent = '';
+    validation.clearFormErrors('create');
+    ui.clearFeedback('form-create-feedback');
   });
 
-  // Editar: carga el post y rellena el formulario
-  router.on('/editar/:id', ({ id }) => {
-    loadEditForm(id);
-  });
+  router.on('/editar/:id', ({ id }) => loadEditForm(id));
+
+  router.on('/favoritos', () => loadFavoritesView());
 };
 
-// ─── Eventos de botones de navegación y formularios ────────────────────────
+// ─── Eventos globales ──────────────────────────────────────────────────────
 
 const attachGlobalEvents = () => {
-  // Formulario: crear
-  document.getElementById('form-create')
-    ?.addEventListener('submit', handleCreatePost);
+  document.getElementById('form-create')?.addEventListener('submit', handleCreatePost);
+  document.getElementById('form-edit')?.addEventListener('submit', handleEditPost);
 
-  // Formulario: editar
-  document.getElementById('form-edit')
-    ?.addEventListener('submit', handleEditPost);
-
-  // Botón cancelar en crear → vuelve al listado
   document.getElementById('btn-create-cancel')
     ?.addEventListener('click', () => router.navigate('/'));
-
-  // Botón cancelar en editar → vuelve al listado
   document.getElementById('btn-edit-cancel')
     ?.addEventListener('click', () => router.navigate('/'));
+
+  // Validación en tiempo real
+  validation.attachLiveValidation('create-title', 'title', 'error-create-title');
+  validation.attachLiveValidation('create-body',  'body',  'error-create-body');
+  validation.attachLiveValidation('edit-title',   'title', 'error-edit-title');
+  validation.attachLiveValidation('edit-body',    'body',  'error-edit-body');
 };
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
-/**
- * Punto de entrada principal.
- * Se ejecuta cuando el DOM está listo.
- */
 const init = () => {
   registerRoutes();
   attachGlobalEvents();
-  router.init(); // Inicia el router y resuelve la ruta actual
+  router.init();
 };
 
-// Esperamos que el DOM esté completamente cargado
 document.addEventListener('DOMContentLoaded', init);

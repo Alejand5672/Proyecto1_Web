@@ -20,6 +20,7 @@ const VIEWS = {
   detail: 'view-detail',
   create: 'view-create',
   edit:   'view-edit',
+  favorites: 'view-favorites',
 };
 
 // ─── Estado interno del router ─────────────────────────────────────────────
@@ -72,6 +73,9 @@ const parseHash = () => {
   if (segments[0] === 'crear') {
     return { route: '/crear', params: {} };
   }
+  if (segments[0] === 'favoritos') {
+    return { route: '/favoritos', params: {} };
+  }
 
   // Cualquier otra cosa → listado
   return { route: '/', params: {} };
@@ -121,7 +125,8 @@ export const resolve = () => {
     case '/post/:id':  showView(VIEWS.detail); break;
     case '/crear':     showView(VIEWS.create); break;
     case '/editar/:id':showView(VIEWS.edit);   break;
-    default:           showView(VIEWS.list);
+    case '/favoritos': showView(VIEWS.favorites); break;
+    default:           showView(VIEWS.list);  
   }
 
   // Ejecutar el handler registrado (si existe)
