@@ -1,5 +1,4 @@
 
-
 /* ─── Botones ─────── */
 .btn {
   display: inline-flex;
@@ -157,6 +156,14 @@
   transition: color var(--transition);
 }
 .post-title-link:hover { color: var(--color-accent); }
+
+/* Nombre del autor en la tarjeta */
+.post-author {
+  font-size: var(--text-xs);
+  color: var(--color-text-light);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
 
 .post-excerpt {
   font-size: var(--text-sm);
