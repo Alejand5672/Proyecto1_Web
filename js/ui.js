@@ -4,14 +4,15 @@
  * Módulo de interfaz de usuario. Solo manipula DOM y renderiza.
  * NO hace fetch. Recibe datos como parámetros desde main.js.
  *
- * Autor (Persona 2): Luis Hernández — 241424
+ * Autores:
+ *   Persona 1: Diego Guevara — 24128
+ *   Persona 2: Luis Hernández — 241424
  */
 
-// ─── Favoritos ───────
+// ─── Favoritos ───────────────────────────────────────────────────────────────
 
 const FAV_KEY = 'blogapp_favorites';
 
-/** Devuelve el Set de IDs favoritos guardados. */
 const getFavIds = () => {
   try {
     const raw = localStorage.getItem(FAV_KEY);
@@ -21,38 +22,26 @@ const getFavIds = () => {
   }
 };
 
-/** Persiste el Set de IDs en localStorage. */
 const saveFavIds = (set) => {
   localStorage.setItem(FAV_KEY, JSON.stringify([...set]));
 };
 
-/** Alterna favorito. Devuelve true si quedó marcado. */
 export const toggleFavorite = (postId) => {
   const favs = getFavIds();
   const id   = String(postId);
-  if (favs.has(id)) {
-    favs.delete(id);
-  } else {
-    favs.add(id);
-  }
+  favs.has(id) ? favs.delete(id) : favs.add(id);
   saveFavIds(favs);
   return favs.has(id);
 };
 
-export const isFavorite  = (postId) => getFavIds().has(String(postId));
+export const isFavorite   = (postId) => getFavIds().has(String(postId));
 export const getFavorites = () => [...getFavIds()];
 export const clearFavorites = () => localStorage.removeItem(FAV_KEY);
 
-// ─── Toast ─────
+// ─── Toast ────────────────────────────────────────────────────────────────────
 
 const TOAST_ICONS = { success: '✓', error: '✕', info: 'ℹ' };
 
-/**
- * Muestra un toast flotante.
- * @param {string} message
- * @param {'success'|'error'|'info'} [type='info']
- * @param {number} [duration=3200]
- */
 export const showToast = (message, type = 'info', duration = 3200) => {
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -67,28 +56,19 @@ export const showToast = (message, type = 'info', duration = 3200) => {
     <span class="toast-icon">${TOAST_ICONS[type] ?? 'ℹ'}</span>
     <span class="toast-msg">${message}</span>
   `;
-
   container.appendChild(toast);
 
   const remove = () => {
     toast.classList.add('toast-exit');
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
   };
-
   setTimeout(remove, duration);
 };
 
-// ─── Modal de confirmación ─────
+// ─── Modal de confirmación ────────────────────────────────────────────────────
 
-/**
- * Muestra un modal de confirmación personalizado.
- * @param {string} message - Texto de la pregunta
- * @param {string} [confirmLabel='Eliminar']
- * @returns {Promise<boolean>} - true si el usuario confirma
- */
 export const showConfirmModal = (message, confirmLabel = 'Eliminar') => {
   return new Promise((resolve) => {
-    // Eliminamos modal previo si existe
     document.getElementById('modal-overlay')?.remove();
 
     const overlay = document.createElement('div');
@@ -104,7 +84,6 @@ export const showConfirmModal = (message, confirmLabel = 'Eliminar') => {
         </div>
       </div>
     `;
-
     document.body.appendChild(overlay);
 
     const cleanup = (result) => {
@@ -116,25 +95,15 @@ export const showConfirmModal = (message, confirmLabel = 'Eliminar') => {
     overlay.querySelector('#modal-confirm').addEventListener('click', () => cleanup(true));
     overlay.querySelector('#modal-cancel').addEventListener('click',  () => cleanup(false));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
-
-    // Foco accesible
     overlay.querySelector('#modal-cancel').focus();
   });
 };
 
-// ─── Spinner / Loading ───────
+// ─── Spinner ──────────────────────────────────────────────────────────────────
 
-/**
- * Inserta un spinner de carga en el contenedor indicado.
- * @param {string|HTMLElement} containerOrId
- * @param {string} [label='Cargando…']
- */
 export const showLoading = (containerOrId, label = 'Cargando…') => {
-  const el = typeof containerOrId === 'string'
-    ? document.getElementById(containerOrId)
-    : containerOrId;
+  const el = _el(containerOrId);
   if (!el) return;
-
   el.innerHTML = `
     <div class="spinner-wrapper">
       <div class="spinner" aria-hidden="true"></div>
@@ -143,20 +112,11 @@ export const showLoading = (containerOrId, label = 'Cargando…') => {
   `;
 };
 
-// ─── Estado vacío ──────
+// ─── Estado vacío ─────────────────────────────────────────────────────────────
 
-/**
- * Muestra un estado vacío con icono y mensaje.
- * @param {string|HTMLElement} containerOrId
- * @param {string} [message='No hay resultados.']
- * @param {string} [icon='📭']
- */
 export const showEmpty = (containerOrId, message = 'No hay resultados.', icon = '📭') => {
-  const el = typeof containerOrId === 'string'
-    ? document.getElementById(containerOrId)
-    : containerOrId;
+  const el = _el(containerOrId);
   if (!el) return;
-
   el.innerHTML = `
     <div class="empty-state">
       <div class="empty-state-icon">${icon}</div>
@@ -166,19 +126,11 @@ export const showEmpty = (containerOrId, message = 'No hay resultados.', icon = 
   `;
 };
 
-// ─── Estado de error ─────
+// ─── Estado de error ──────────────────────────────────────────────────────────
 
-/**
- * Muestra un mensaje de error visual en un contenedor.
- * @param {string|HTMLElement} containerOrId
- * @param {string} message
- */
 export const showError = (containerOrId, message) => {
-  const el = typeof containerOrId === 'string'
-    ? document.getElementById(containerOrId)
-    : containerOrId;
+  const el = _el(containerOrId);
   if (!el) return;
-
   el.innerHTML = `
     <div class="error-state">
       <div class="error-state-icon">⚠️</div>
@@ -188,37 +140,32 @@ export const showError = (containerOrId, message) => {
   `;
 };
 
-// ─── Feedback de formularios ─────────
+// ─── Feedback de formularios ──────────────────────────────────────────────────
 
-/**
- * Aplica clase y texto al div de feedback de un formulario.
- * @param {string} elementId
- * @param {string} message
- * @param {'success'|'error'|'loading'|''} type
- */
 export const setFormFeedback = (elementId, message, type = '') => {
   const el = document.getElementById(elementId);
   if (!el) return;
-  el.className = type ? `feedback-${type}` : '';
+  el.className  = type ? `feedback-${type}` : '';
   el.textContent = message;
 };
 
 export const clearFeedback = (elementId) => {
   const el = document.getElementById(elementId);
   if (!el) return;
-  el.className = '';
+  el.className  = '';
   el.textContent = '';
 };
 
-// ─── Renderizado del listado ──────────
+// ─── Renderizado del listado ──────────────────────────────────────────────────
 
 /**
  * Renderiza la cuadrícula de tarjetas de posts.
- * @param {Array}    posts     - Array de post objects
- * @param {Function} onDelete  - handler(id)
- * @param {Function} onFav     - handler(id, btn)
+ * @param {Array}       posts      - Array de post objects
+ * @param {Map}         authorsMap - Map<userId, author> (puede ser vacío)
+ * @param {Function}    onDelete   - handler(id)
+ * @param {Function}    onFav      - handler(id, btn)
  */
-export const renderPostList = (posts, onDelete, onFav) => {
+export const renderPostList = (posts, authorsMap = new Map(), onDelete, onFav) => {
   const container = document.getElementById('posts-container');
   if (!container) return;
 
@@ -227,46 +174,45 @@ export const renderPostList = (posts, onDelete, onFav) => {
     return;
   }
 
-  container.innerHTML = posts.map((post, i) => `
-    <article class="post-card" data-id="${post.id}" style="animation-delay:${i * 40}ms">
-      <h2>
-        <a href="#/post/${post.id}" class="post-title-link">${escHtml(post.title)}</a>
-      </h2>
-      <p class="post-excerpt">${escHtml(post.body.slice(0, 130))}…</p>
-      <div class="post-tags">
-        ${(post.tags || []).map((t) => `<span class="tag">${escHtml(t)}</span>`).join('')}
-      </div>
-      <div class="post-actions">
-        <a href="#/post/${post.id}" class="btn btn-sm">Ver más</a>
-        <a href="#/editar/${post.id}" class="btn btn-sm btn-secondary">Editar</a>
-        <button class="btn btn-sm btn-danger  btn-delete" data-id="${post.id}">Eliminar</button>
-        <button class="btn-fav btn-fav-toggle ${isFavorite(post.id) ? 'is-fav' : ''}"
-                data-id="${post.id}" title="Marcar favorito">
-          Favorito
-        </button>
-      </div>
-    </article>
-  `).join('');
+  container.innerHTML = posts.map((post, i) => {
+    const author = authorsMap.get(post.userId);
+    const authorHtml = author
+      ? `<span class="post-author">✍️ ${escHtml(author.firstName)} ${escHtml(author.lastName)}</span>`
+      : `<span class="post-author">✍️ Usuario #${post.userId}</span>`;
 
-  // Eventos
+    return `
+      <article class="post-card" data-id="${post.id}" style="animation-delay:${i * 40}ms">
+        <h2>
+          <a href="#/post/${post.id}" class="post-title-link">${escHtml(post.title)}</a>
+        </h2>
+        ${authorHtml}
+        <p class="post-excerpt">${escHtml(post.body.slice(0, 130))}…</p>
+        <div class="post-tags">
+          ${(post.tags || []).map((t) => `<span class="tag">${escHtml(t)}</span>`).join('')}
+        </div>
+        <div class="post-actions">
+          <a href="#/post/${post.id}" class="btn btn-sm">Ver más</a>
+          <a href="#/editar/${post.id}" class="btn btn-sm btn-secondary">Editar</a>
+          <button class="btn btn-sm btn-danger btn-delete" data-id="${post.id}">Eliminar</button>
+          <button class="btn-fav btn-fav-toggle ${isFavorite(post.id) ? 'is-fav' : ''}"
+                  data-id="${post.id}" title="Marcar favorito">
+            Favorito
+          </button>
+        </div>
+      </article>
+    `;
+  }).join('');
+
   container.querySelectorAll('.btn-delete').forEach((btn) => {
     btn.addEventListener('click', () => onDelete && onDelete(btn.dataset.id));
   });
-
   container.querySelectorAll('.btn-fav-toggle').forEach((btn) => {
     btn.addEventListener('click', () => onFav && onFav(btn.dataset.id, btn));
   });
 };
 
-// ─── Renderizado del detalle ──────
+// ─── Renderizado del detalle ──────────────────────────────────────────────────
 
-/**
- * Renderiza el detalle completo de un post.
- * @param {Object}   post
- * @param {Object|null} author
- * @param {Function} onDelete  - handler(id)
- * @param {Function} onFav     - handler(id, btn)
- */
 export const renderPostDetail = (post, author = null, onDelete, onFav) => {
   const container = document.getElementById('post-detail');
   if (!container) return;
@@ -287,17 +233,16 @@ export const renderPostDetail = (post, author = null, onDelete, onFav) => {
           ${(post.tags || []).map((t) => `<span class="tag">${escHtml(t)}</span>`).join('')}
         </div>
       </header>
-
       <div class="post-body">
         <p>${escHtml(post.body)}</p>
       </div>
-
       <div class="post-reactions">
         👍 <strong>${post.reactions?.likes ?? 0}</strong>
         &nbsp;&nbsp;
         👎 <strong>${post.reactions?.dislikes ?? 0}</strong>
+        &nbsp;&nbsp;
+        👁️ <strong>${post.views ?? '—'}</strong> vistas
       </div>
-
       <footer class="post-footer">
         <a href="#/editar/${post.id}" class="btn">Editar</a>
         <button class="btn btn-danger btn-delete" data-id="${post.id}">Eliminar</button>
@@ -308,19 +253,12 @@ export const renderPostDetail = (post, author = null, onDelete, onFav) => {
 
   container.querySelector('.btn-delete')
     ?.addEventListener('click', () => onDelete && onDelete(post.id));
-
   container.querySelector('.btn-fav-toggle')
     ?.addEventListener('click', (e) => onFav && onFav(post.id, e.currentTarget));
 };
 
-// ─── Renderizado de paginación ────────
+// ─── Renderizado de paginación ────────────────────────────────────────────────
 
-/**
- * @param {number}   currentPage   - Base 0
- * @param {number}   totalPages
- * @param {Function} onPrev
- * @param {Function} onNext
- */
 export const renderPagination = (currentPage, totalPages, onPrev, onNext) => {
   const container = document.getElementById('pagination-controls');
   if (!container) return;
@@ -341,13 +279,8 @@ export const renderPagination = (currentPage, totalPages, onPrev, onNext) => {
   document.getElementById('btn-next')?.addEventListener('click', onNext);
 };
 
-// ─── Filtros ───────
+// ─── Filtros (listado principal) ──────────────────────────────────────────────
 
-/**
- * Renderiza la barra de filtros en #list-controls.
- * @param {Function} onChange - Se llama con { search, tag, userId } al cambiar cualquier filtro
- * @param {Function} onClear  - Limpia filtros
- */
 export const renderFilters = (onChange, onClear) => {
   const container = document.getElementById('list-controls');
   if (!container) return;
@@ -387,7 +320,6 @@ export const renderFilters = (onChange, onClear) => {
     onClear();
   });
 
-  // Filtro al presionar Enter
   ['filter-search', 'filter-tag', 'filter-user'].forEach((id) => {
     document.getElementById(id)?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') onChange(getValues());
@@ -395,11 +327,59 @@ export const renderFilters = (onChange, onClear) => {
   });
 };
 
-// ─── Vista de Favoritos ─────────
+// ─── Filtros de la vista Favoritos ────────────────────────────────────────────
 
 /**
- * Renderiza la vista de favoritos a partir de un array de post objects.
- * @param {Array}    posts    - Posts que están en favoritos
+ * Renderiza la barra de filtros específica de la vista de favoritos.
+ * Solo filtra por texto y etiqueta (no hay userId útil en favoritos).
+ * @param {Function} onChange - ({ search, tag }) => void
+ * @param {Function} onClear  - () => void
+ */
+export const renderFavFilters = (onChange, onClear) => {
+  const container = document.getElementById('fav-controls');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="fav-filter-search">Buscar en favoritos</label>
+        <input type="search" id="fav-filter-search" placeholder="Título o contenido…" autocomplete="off" />
+      </div>
+      <div class="filter-group">
+        <label for="fav-filter-tag">Etiqueta</label>
+        <input type="text" id="fav-filter-tag" placeholder="ej: history" autocomplete="off" />
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-sm" id="btn-apply-fav-filters">Filtrar</button>
+        <button class="btn btn-sm btn-secondary" id="btn-clear-fav-filters">Limpiar</button>
+      </div>
+    </div>
+  `;
+
+  const getValues = () => ({
+    search: document.getElementById('fav-filter-search')?.value.trim().toLowerCase() ?? '',
+    tag:    document.getElementById('fav-filter-tag')?.value.trim().toLowerCase()    ?? '',
+  });
+
+  document.getElementById('btn-apply-fav-filters')?.addEventListener('click', () => onChange(getValues()));
+  document.getElementById('btn-clear-fav-filters')?.addEventListener('click', () => {
+    document.getElementById('fav-filter-search').value = '';
+    document.getElementById('fav-filter-tag').value    = '';
+    onClear();
+  });
+
+  ['fav-filter-search', 'fav-filter-tag'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') onChange(getValues());
+    });
+  });
+};
+
+// ─── Vista de Favoritos ───────────────────────────────────────────────────────
+
+/**
+ * Renderiza la grilla de favoritos.
+ * @param {Array}    posts    - Posts que están en favoritos (ya filtrados)
  * @param {Function} onRemove - handler(id)
  */
 export const renderFavoritesView = (posts, onRemove) => {
@@ -407,7 +387,7 @@ export const renderFavoritesView = (posts, onRemove) => {
   if (!container) return;
 
   if (!posts.length) {
-    showEmpty(container, 'Aún no has guardado ninguna publicación como favorita.', '⭐');
+    showEmpty(container, 'No hay favoritos que coincidan con tu búsqueda.', '⭐');
     return;
   }
 
@@ -434,20 +414,21 @@ export const renderFavoritesView = (posts, onRemove) => {
   });
 };
 
-// ─── Actualizar botón de favorito sin re-render ───────
+// ─── Actualizar botón de favorito sin re-render ───────────────────────────────
 
-/**
- * Actualiza visualmente el botón de favorito tras togglearlo.
- */
 export const updateFavBtn = (btn, isFav) => {
   if (!btn) return;
   btn.classList.toggle('is-fav', isFav);
   btn.title = isFav ? 'Quitar de favoritos' : 'Marcar como favorito';
 };
 
-// ─── Utilidad interna ───────
+// ─── Utilidad interna ─────────────────────────────────────────────────────────
 
-/** Escapa HTML para evitar XSS al renderizar datos externos. */
+const _el = (containerOrId) =>
+  typeof containerOrId === 'string'
+    ? document.getElementById(containerOrId)
+    : containerOrId;
+
 const escHtml = (str) => {
   if (str == null) return '';
   return String(str)
