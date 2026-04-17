@@ -4,9 +4,9 @@
  * Punto de entrada de la aplicación.
  * Orquesta router, api, ui y validation. Contiene solo lógica de control.
  *
- * Persona 1 (Diego Guevara — 24128): arquitectura base, api, router, CRUD
- * Persona 2 (Luis Hernández — 241424): integración de ui.js, validation.js,
- *   filtros, favoritos, modal de confirmación, toasts
+ * Autores:
+ *   Persona 1: Diego Guevara — 24128
+ *   Persona 2: Luis Hernández — 241424
  */
 
 import * as api        from './api.js';
@@ -18,16 +18,21 @@ import * as validation from './validation.js';
 
 const state = {
   posts:        [],
-  allPosts:     [],   // copia para filtrar localmente
+  allPosts:     [],
+  authorsMap:   new Map(),   // Map<userId, author> para el listado actual
   currentPage:  0,
   postsPerPage: 10,
   totalPosts:   0,
   filters:      { search: '', tag: '', userId: '' },
+
+  // Estado de la vista de favoritos
+  favPosts:     [],          // todos los posts favoritos cargados
+  favFilters:   { search: '', tag: '' },
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-/** Filtra state.allPosts según state.filters y renderiza. */
+/** Filtra state.allPosts según state.filters y re-renderiza el listado. */
 const applyFilters = () => {
   const { search, tag, userId } = state.filters;
 
@@ -35,17 +40,29 @@ const applyFilters = () => {
     const matchSearch = !search ||
       post.title.toLowerCase().includes(search) ||
       post.body.toLowerCase().includes(search);
-
-    const matchTag = !tag ||
+    const matchTag    = !tag ||
       (post.tags || []).some((t) => t.toLowerCase().includes(tag));
-
-    const matchUser = !userId ||
-      String(post.userId) === userId;
-
+    const matchUser   = !userId || String(post.userId) === userId;
     return matchSearch && matchTag && matchUser;
   });
 
-  ui.renderPostList(filtered, handleDeletePost, handleToggleFav);
+  ui.renderPostList(filtered, state.authorsMap, handleDeletePost, handleToggleFav);
+};
+
+/** Filtra state.favPosts según state.favFilters y re-renderiza favoritos. */
+const applyFavFilters = () => {
+  const { search, tag } = state.favFilters;
+
+  const filtered = state.favPosts.filter((post) => {
+    const matchSearch = !search ||
+      post.title.toLowerCase().includes(search) ||
+      post.body.toLowerCase().includes(search);
+    const matchTag = !tag ||
+      (post.tags || []).some((t) => t.toLowerCase().includes(tag));
+    return matchSearch && matchTag;
+  });
+
+  ui.renderFavoritesView(filtered, handleRemoveFav);
 };
 
 // ─── Carga de datos ────────────────────────────────────────────────────────
@@ -57,20 +74,22 @@ const loadPage = async (page = 0) => {
     const skip             = page * state.postsPerPage;
     const { posts, total } = await api.getPosts(state.postsPerPage, skip);
 
-    state.posts      = posts;
-    state.allPosts   = posts;
+    state.posts       = posts;
+    state.allPosts    = posts;
     state.currentPage = page;
     state.totalPosts  = total;
+    state.filters     = { search: '', tag: '', userId: '' };
 
-    // Limpiar filtros al cambiar de página
-    state.filters = { search: '', tag: '', userId: '' };
+    // ── Carga de autores en paralelo para las cards ──
+    const userIds = posts.map((p) => p.userId);
+    state.authorsMap = await api.getUsersByIds(userIds);
 
     ui.renderFilters(
       (values) => { state.filters = values; applyFilters(); },
       ()       => { state.filters = { search: '', tag: '', userId: '' }; applyFilters(); }
     );
 
-    ui.renderPostList(posts, handleDeletePost, handleToggleFav);
+    ui.renderPostList(posts, state.authorsMap, handleDeletePost, handleToggleFav);
 
     const totalPages = Math.ceil(total / state.postsPerPage);
     ui.renderPagination(
@@ -124,29 +143,44 @@ const populateEditForm = (post) => {
 const handleToggleFav = (postId, btn) => {
   const isFav = ui.toggleFavorite(postId);
   ui.updateFavBtn(btn, isFav);
-  const msg = isFav ? 'Añadido a favoritos ⭐' : 'Quitado de favoritos';
-  ui.showToast(msg, isFav ? 'success' : 'info');
+  ui.showToast(isFav ? 'Añadido a favoritos ⭐' : 'Quitado de favoritos', isFav ? 'success' : 'info');
+};
+
+/** Quita favorito desde la vista de favoritos y re-aplica filtros. */
+const handleRemoveFav = (id) => {
+  ui.toggleFavorite(id);
+  state.favPosts = state.favPosts.filter((p) => String(p.id) !== String(id));
+  ui.showToast('Quitado de favoritos', 'info');
+  applyFavFilters();
 };
 
 const loadFavoritesView = async () => {
   const favIds = ui.getFavorites();
-  ui.showLoading('favorites-container', 'Cargando favoritos…');
+
+  // Resetear filtros al entrar a la vista
+  state.favFilters = { search: '', tag: '' };
+
+  // Renderizar barra de filtros
+  ui.renderFavFilters(
+    (values) => { state.favFilters = values; applyFavFilters(); },
+    ()       => { state.favFilters = { search: '', tag: '' }; applyFavFilters(); }
+  );
 
   if (!favIds.length) {
+    state.favPosts = [];
     ui.showEmpty('favorites-container', 'Aún no tienes favoritos guardados.', '⭐');
     return;
   }
 
-  try {
-    // Cargamos cada post favorito en paralelo
-    const posts = await Promise.all(favIds.map((id) => api.getPostById(id).catch(() => null)));
-    const valid  = posts.filter(Boolean);
+  ui.showLoading('favorites-container', 'Cargando favoritos…');
 
-    ui.renderFavoritesView(valid, async (id) => {
-      ui.toggleFavorite(id); // quitar
-      ui.showToast('Quitado de favoritos', 'info');
-      await loadFavoritesView(); // re-render
-    });
+  try {
+    const results = await Promise.allSettled(favIds.map((id) => api.getPostById(id)));
+    state.favPosts = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    applyFavFilters();
   } catch (error) {
     ui.showError('favorites-container', error.message);
   }
@@ -165,7 +199,6 @@ const handleCreatePost = async (event) => {
   if (!isValid) return;
 
   const tags = validation.parseTags(tagsRaw);
-
   ui.setFormFeedback('form-create-feedback', 'Publicando…', 'loading');
 
   try {
@@ -173,7 +206,6 @@ const handleCreatePost = async (event) => {
 
     ui.setFormFeedback('form-create-feedback', `Publicación creada (ID: ${newPost.id})`, 'success');
     ui.showToast('¡Publicación creada exitosamente!', 'success');
-
     document.getElementById('form-create')?.reset();
     validation.clearFormErrors('create');
 
@@ -187,9 +219,9 @@ const handleCreatePost = async (event) => {
 const handleEditPost = async (event) => {
   event.preventDefault();
 
-  const id   = document.getElementById('edit-post-id')?.value  ?? '';
-  const title = document.getElementById('edit-title')?.value   ?? '';
-  const body  = document.getElementById('edit-body')?.value    ?? '';
+  const id    = document.getElementById('edit-post-id')?.value  ?? '';
+  const title = document.getElementById('edit-title')?.value    ?? '';
+  const body  = document.getElementById('edit-body')?.value     ?? '';
 
   const isValid = validation.validateEditForm({ title, body });
   if (!isValid) return;
@@ -223,8 +255,7 @@ const handleDeletePost = async (id) => {
     if (result.isDeleted) {
       ui.showToast('Publicación eliminada.', 'info');
 
-      const currentHash = window.location.hash;
-      if (currentHash.startsWith('#/post/')) {
+      if (window.location.hash.startsWith('#/post/')) {
         router.navigate('/');
       } else {
         state.posts    = state.posts.filter((p) => String(p.id) !== String(id));
@@ -247,18 +278,14 @@ const handleDeletePost = async (id) => {
 
 const registerRoutes = () => {
   router.on('/', () => loadPage(state.currentPage));
-
-  router.on('/post/:id', ({ id }) => loadPostDetail(id));
-
-  router.on('/crear', () => {
+  router.on('/post/:id',   ({ id }) => loadPostDetail(id));
+  router.on('/crear',      () => {
     document.getElementById('form-create')?.reset();
     validation.clearFormErrors('create');
     ui.clearFeedback('form-create-feedback');
   });
-
   router.on('/editar/:id', ({ id }) => loadEditForm(id));
-
-  router.on('/favoritos', () => loadFavoritesView());
+  router.on('/favoritos',  () => loadFavoritesView());
 };
 
 // ─── Eventos globales ──────────────────────────────────────────────────────
@@ -266,13 +293,9 @@ const registerRoutes = () => {
 const attachGlobalEvents = () => {
   document.getElementById('form-create')?.addEventListener('submit', handleCreatePost);
   document.getElementById('form-edit')?.addEventListener('submit', handleEditPost);
+  document.getElementById('btn-create-cancel')?.addEventListener('click', () => router.navigate('/'));
+  document.getElementById('btn-edit-cancel')?.addEventListener('click',   () => router.navigate('/'));
 
-  document.getElementById('btn-create-cancel')
-    ?.addEventListener('click', () => router.navigate('/'));
-  document.getElementById('btn-edit-cancel')
-    ?.addEventListener('click', () => router.navigate('/'));
-
-  // Validación en tiempo real
   validation.attachLiveValidation('create-title', 'title', 'error-create-title');
   validation.attachLiveValidation('create-body',  'body',  'error-create-body');
   validation.attachLiveValidation('edit-title',   'title', 'error-edit-title');
