@@ -76,6 +76,15 @@
   background-color: var(--color-surface-alt);
 }
 
+/* Enlace "Favoritos" */
+#nav-favorites {
+  color: var(--color-warning) !important;
+}
+#nav-favorites:hover {
+  background-color: var(--color-warning-soft) !important;
+  color: var(--color-warning) !important;
+}
+
 /* Enlace "Nueva Publicación" — diferenciado */
 #nav-create {
   background-color: var(--color-text) !important;
@@ -140,7 +149,7 @@
   width: 100%;
 }
 
-/* ─── Vista crear / edita ─────── */
+/* ─── Vista crear / editar ─────── */
 #view-create,
 #view-edit {
   max-width: 640px;
@@ -155,12 +164,8 @@
   gap: var(--space-lg);
 }
 
-#view-favorites > h1 {
-  font-size: var(--text-3xl);
-  letter-spacing: -0.03em;
-  margin-bottom: var(--space-xl);
-  padding-bottom: var(--space-md);
-  border-bottom: 2px solid var(--color-border);
+#fav-controls {
+  margin-bottom: var(--space-sm);
 }
 
 #favorites-container {
@@ -240,8 +245,7 @@
     grid-template-columns: 1fr;
   }
 
-  .view > h1,
-  #view-favorites > h1 {
+  .view > h1 {
     font-size: var(--text-2xl);
   }
 
@@ -256,6 +260,13 @@
   #main-nav ul {
     gap: 2px;
   }
+
+  #nav-create {
+    font-size: var(--text-xs) !important;
+    padding: var(--space-xs) var(--space-sm) !important;
+  }
+}
+
 
   #nav-create {
     font-size: var(--text-xs) !important;
